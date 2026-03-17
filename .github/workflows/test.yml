@@ -54,7 +54,7 @@ jobs:
           restore-keys: kernel-${{ matrix.device }}
           max-size: 5G
 
-      - name: 配置内核基础参数 (Kprobes/OverlayFS/LTO等)
+      - name: 配置内核基础参数 (Kprobes/OverlayFS/LTO/MMU_NOTIFIER等)
         working-directory: kernel
         run: |
           DEFCONFIG="arch/arm64/configs/umi_defconfig"
@@ -76,6 +76,9 @@ jobs:
           
           # 禁用 CC_WERROR
           echo "CONFIG_CC_WERROR=n" >> $DEFCONFIG
+
+          # 修复 KVM 相关编译错误：显式启用 MMU_NOTIFIER
+          echo "CONFIG_MMU_NOTIFIER=y" >> $DEFCONFIG
 
       - name: 配置 LXC 和 Docker 支持
         working-directory: kernel
