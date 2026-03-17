@@ -160,38 +160,52 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             umi_defconfig all
 
-      # ===== 新增步骤：准备内核镜像（确保 Image.gz-dtb 存在）=====
+      # ===== 改进：准备内核镜像，确保 Image.gz-dtb 生成 =====
       - name: 准备内核镜像 (生成 Image.gz-dtb)
         working-directory: kernel
         run: |
+          set -e
           echo "检查编译输出目录："
           ls -la out/arch/arm64/boot/
           ls -la out/arch/arm64/boot/dts/ || echo "没有 dts 目录"
-          ls -la out/arch/arm64/boot/dts/qcom/ || echo "没有 qcom 目录"
+          
+          # 首先尝试查找已存在的 dtb 文件
+          DTB_FILES=$(find out -name "*.dtb" 2>/dev/null || true)
+          if [ -z "$DTB_FILES" ]; then
+            echo "未找到任何 dtb 文件，尝试编译设备树..."
+            make -j$(nproc) O=out ARCH=arm64 dtbs
+            DTB_FILES=$(find out -name "*.dtb" 2>/dev/null || true)
+          fi
+          
+          if [ -z "$DTB_FILES" ]; then
+            echo "错误：仍然找不到任何设备树文件 (.dtb)"
+            exit 1
+          fi
+          
+          echo "找到以下 dtb 文件："
+          echo "$DTB_FILES"
+          
+          # 根据设备名 umi 选择 dtb 文件
+          UMI_DTB=$(echo "$DTB_FILES" | grep -E "umi|sm8250" | head -n1)
+          if [ -z "$UMI_DTB" ]; then
+            # 如果没有匹配的，取第一个 dtb
+            UMI_DTB=$(echo "$DTB_FILES" | head -n1)
+            echo "警告：未找到包含 umi 或 sm8250 的 dtb 文件，使用第一个 dtb: $UMI_DTB"
+          else
+            echo "找到匹配的设备树文件：$UMI_DTB"
+          fi
           
           # 如果 Image.gz-dtb 不存在，手动创建
           if [ ! -f out/arch/arm64/boot/Image.gz-dtb ]; then
-            echo "Image.gz-dtb 不存在，手动生成..."
+            echo "生成 Image.gz-dtb..."
             # 压缩 Image 为 Image.gz
             gzip -c out/arch/arm64/boot/Image > out/arch/arm64/boot/Image.gz
-            
-            # 查找设备对应的 dtb 文件（假设设备名为 umi）
-            DTB_FILE=$(find out/arch/arm64/boot/dts -name "*umi*.dtb" | head -n1)
-            if [ -z "$DTB_FILE" ]; then
-              # 尝试其他可能的名称（如 sm8250-umi.dtb）
-              DTB_FILE=$(find out/arch/arm64/boot/dts -name "*.dtb" | grep -E "umi|sm8250" | head -n1)
-            fi
-            if [ -z "$DTB_FILE" ]; then
-              echo "错误：找不到 umi 的设备树文件 (.dtb)"
-              exit 1
-            fi
-            echo "找到设备树文件：$DTB_FILE"
-            cat out/arch/arm64/boot/Image.gz "$DTB_FILE" > out/arch/arm64/boot/Image.gz-dtb
+            # 合并
+            cat out/arch/arm64/boot/Image.gz "$UMI_DTB" > out/arch/arm64/boot/Image.gz-dtb
             echo "已生成 out/arch/arm64/boot/Image.gz-dtb"
           else
-            echo "Image.gz-dtb 已存在，跳过生成"
+            echo "Image.gz-dtb 已存在"
           fi
-          # 确认文件存在
           ls -la out/arch/arm64/boot/Image.gz-dtb
 
       - name: 打包(AnyKernel3)
