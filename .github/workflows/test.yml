@@ -54,7 +54,7 @@ jobs:
           restore-keys: kernel-${{ matrix.device }}
           max-size: 5G
 
-      - name: 配置内核基础参数 (Kprobes/OverlayFS/LTO/MMU_NOTIFIER等)
+      - name: 配置内核基础参数 (Kprobes/OverlayFS/LTO等)
         working-directory: kernel
         run: |
           DEFCONFIG="arch/arm64/configs/umi_defconfig"
@@ -76,9 +76,6 @@ jobs:
           
           # 禁用 CC_WERROR
           echo "CONFIG_CC_WERROR=n" >> $DEFCONFIG
-
-          # 修复 KVM 相关编译错误：显式启用 MMU_NOTIFIER
-          echo "CONFIG_MMU_NOTIFIER=y" >> $DEFCONFIG
 
       - name: 配置 LXC 和 Docker 支持
         working-directory: kernel
@@ -120,6 +117,27 @@ jobs:
           if [ -f net/netfilter/xt_qtaguid.c ]; then
               patch -p0 < utils/xt_qtaguid.patch
           fi
+
+      # ===== 修复步骤：彻底关闭 KVM/VFIO 并启用 MMU_NOTIFIER =====
+      - name: 修复 MMU_NOTIFIER 并确保 KVM/VFIO 关闭
+        working-directory: kernel
+        run: |
+          DEFCONFIG="arch/arm64/configs/umi_defconfig"
+          
+          # 1. 彻底禁用 KVM 和 VIRTUALIZATION
+          sed -i '/CONFIG_KVM/d' $DEFCONFIG
+          sed -i '/CONFIG_VIRTUALIZATION/d' $DEFCONFIG
+          echo "# CONFIG_KVM is not set" >> $DEFCONFIG
+          echo "# CONFIG_VIRTUALIZATION is not set" >> $DEFCONFIG
+          
+          # 2. 彻底禁用 VFIO 及其相关选项（它们依赖 mmu_notifier）
+          sed -i '/CONFIG_VFIO/d' $DEFCONFIG
+          sed -i '/CONFIG_VFIO_PCI/d' $DEFCONFIG
+          echo "# CONFIG_VFIO is not set" >> $DEFCONFIG
+          echo "# CONFIG_VFIO_PCI is not set" >> $DEFCONFIG
+          
+          # 3. 启用 MMU_NOTIFIER（即使没有虚拟化，某些驱动也可能需要）
+          echo "CONFIG_MMU_NOTIFIER=y" >> $DEFCONFIG
 
       - name: 编译
         working-directory: kernel
