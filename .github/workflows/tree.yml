@@ -80,5 +80,5 @@ jobs:
       - name: 上传设备树文件
         uses: actions/upload-artifact@v5
         with:
-          name: dtb-raphael
+          name: dtb-umi
           path: dtb_artifacts/
