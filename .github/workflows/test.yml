@@ -118,8 +118,8 @@ jobs:
               patch -p0 < utils/xt_qtaguid.patch
           fi
 
-      # ===== 修复步骤：彻底关闭 KVM/VFIO 并启用 MMU_NOTIFIER =====
-      - name: 修复 MMU_NOTIFIER 并确保 KVM/VFIO 关闭
+      # ===== 修复步骤：彻底关闭虚拟化并启用必要的功能 =====
+      - name: 修复配置（关闭KVM/VFIO，启用MMU_NOTIFIER和Android Vendor Hooks）
         working-directory: kernel
         run: |
           DEFCONFIG="arch/arm64/configs/umi_defconfig"
@@ -138,6 +138,10 @@ jobs:
           
           # 3. 启用 MMU_NOTIFIER（即使没有虚拟化，某些驱动也可能需要）
           echo "CONFIG_MMU_NOTIFIER=y" >> $DEFCONFIG
+
+          # 4. 启用 Android Vendor Hooks 以解决未定义的 tracepoint 符号
+          echo "CONFIG_ANDROID_VENDOR_HOOKS=y" >> $DEFCONFIG
+          echo "CONFIG_TRACEPOINTS=y" >> $DEFCONFIG   # 确保 tracepoints 开启
 
       - name: 编译
         working-directory: kernel
