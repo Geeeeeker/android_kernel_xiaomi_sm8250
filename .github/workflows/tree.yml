@@ -29,7 +29,7 @@ jobs:
       - name: 深度清理所有相关设备树源文件
         working-directory: kernel
         run: |
-          # 清理所有可能被包含的 dts/dtsi 文件（包括公共文件和 raphael 相关文件）
+          # 清理所有可能被包含的 dts/dtsi 文件（包括公共文件和 umi 相关文件）
           find arch/arm64/boot/dts -type f \( -name "*.dts" -o -name "*.dtsi" \) -print0 | while IFS= read -r -d '' FILE; do
             echo "正在清理: $FILE"
             # 移除 UTF-8 BOM 头
@@ -60,12 +60,12 @@ jobs:
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- dtbs O=out -k -j$(nproc) || true
           echo "编译完成（可能部分设备树失败）"
 
-      - name: 收集 raphael 设备树文件
+      - name: 收集 umi 设备树文件
         run: |
           mkdir -p dtb_artifacts
           find kernel/out/arch/arm64/boot/dts -type f \( \
-            -name "raphael*.dtb" -o \
-            -name "raphael*.dtbo" -o \
+            -name "umi*.dtb" -o \
+            -name "umi*.dtbo" -o \
             -name "sm8150-xiaomi.dtb" \
           \) -exec cp {} dtb_artifacts/ \;
           
