@@ -118,30 +118,30 @@ jobs:
               patch -p0 < utils/xt_qtaguid.patch
           fi
 
-      # ===== 修复步骤：彻底关闭虚拟化并启用必要的功能 =====
+      # ===== 修复配置：关闭虚拟化，启用必要功能 =====
       - name: 修复配置（关闭KVM/VFIO，启用MMU_NOTIFIER和Android Vendor Hooks）
         working-directory: kernel
         run: |
           DEFCONFIG="arch/arm64/configs/umi_defconfig"
           
-          # 1. 彻底禁用 KVM 和 VIRTUALIZATION
+          # 彻底禁用 KVM 和 VIRTUALIZATION
           sed -i '/CONFIG_KVM/d' $DEFCONFIG
           sed -i '/CONFIG_VIRTUALIZATION/d' $DEFCONFIG
           echo "# CONFIG_KVM is not set" >> $DEFCONFIG
           echo "# CONFIG_VIRTUALIZATION is not set" >> $DEFCONFIG
           
-          # 2. 彻底禁用 VFIO 及其相关选项（它们依赖 mmu_notifier）
+          # 彻底禁用 VFIO 及其相关选项
           sed -i '/CONFIG_VFIO/d' $DEFCONFIG
           sed -i '/CONFIG_VFIO_PCI/d' $DEFCONFIG
           echo "# CONFIG_VFIO is not set" >> $DEFCONFIG
           echo "# CONFIG_VFIO_PCI is not set" >> $DEFCONFIG
           
-          # 3. 启用 MMU_NOTIFIER（即使没有虚拟化，某些驱动也可能需要）
+          # 启用 MMU_NOTIFIER
           echo "CONFIG_MMU_NOTIFIER=y" >> $DEFCONFIG
 
-          # 4. 启用 Android Vendor Hooks 以解决未定义的 tracepoint 符号
+          # 启用 Android Vendor Hooks 解决未定义符号
           echo "CONFIG_ANDROID_VENDOR_HOOKS=y" >> $DEFCONFIG
-          echo "CONFIG_TRACEPOINTS=y" >> $DEFCONFIG   # 确保 tracepoints 开启
+          echo "CONFIG_TRACEPOINTS=y" >> $DEFCONFIG
 
       - name: 编译
         working-directory: kernel
@@ -159,6 +159,40 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             umi_defconfig all
+
+      # ===== 新增步骤：准备内核镜像（确保 Image.gz-dtb 存在）=====
+      - name: 准备内核镜像 (生成 Image.gz-dtb)
+        working-directory: kernel
+        run: |
+          echo "检查编译输出目录："
+          ls -la out/arch/arm64/boot/
+          ls -la out/arch/arm64/boot/dts/ || echo "没有 dts 目录"
+          ls -la out/arch/arm64/boot/dts/qcom/ || echo "没有 qcom 目录"
+          
+          # 如果 Image.gz-dtb 不存在，手动创建
+          if [ ! -f out/arch/arm64/boot/Image.gz-dtb ]; then
+            echo "Image.gz-dtb 不存在，手动生成..."
+            # 压缩 Image 为 Image.gz
+            gzip -c out/arch/arm64/boot/Image > out/arch/arm64/boot/Image.gz
+            
+            # 查找设备对应的 dtb 文件（假设设备名为 umi）
+            DTB_FILE=$(find out/arch/arm64/boot/dts -name "*umi*.dtb" | head -n1)
+            if [ -z "$DTB_FILE" ]; then
+              # 尝试其他可能的名称（如 sm8250-umi.dtb）
+              DTB_FILE=$(find out/arch/arm64/boot/dts -name "*.dtb" | grep -E "umi|sm8250" | head -n1)
+            fi
+            if [ -z "$DTB_FILE" ]; then
+              echo "错误：找不到 umi 的设备树文件 (.dtb)"
+              exit 1
+            fi
+            echo "找到设备树文件：$DTB_FILE"
+            cat out/arch/arm64/boot/Image.gz "$DTB_FILE" > out/arch/arm64/boot/Image.gz-dtb
+            echo "已生成 out/arch/arm64/boot/Image.gz-dtb"
+          else
+            echo "Image.gz-dtb 已存在，跳过生成"
+          fi
+          # 确认文件存在
+          ls -la out/arch/arm64/boot/Image.gz-dtb
 
       - name: 打包(AnyKernel3)
         run: |
