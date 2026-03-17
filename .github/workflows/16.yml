@@ -152,7 +152,7 @@ jobs:
             KCFLAGS="-Wno-error=strict-prototypes" \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            raphael_defconfig
+            umi_defconfig
 
           # 仅编译内核镜像 (Image)，跳过所有 dtbs
           make -j$(nproc --all) \
